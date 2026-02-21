@@ -1,8 +1,9 @@
 from pydantic import BaseModel, Field
 from langchain_core.runnables import RunnableLambda
 from models import llm_model
-from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage
+from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate,HumanMessagePromptTemplate
+
 
 class ScenePlan(BaseModel):
     prompts: list[str] = Field(description="The prompts to generate the scenes")
@@ -11,8 +12,22 @@ class PlannerOutput(BaseModel):
     plan: ScenePlan = Field(description="The plan of the video")
     response: str = Field(description="The response to the user")
 
-class PlannerResponse(PlannerOutput):
-    history: list[BaseMessage] = Field(description="The history of the conversation")
+class PlannerHistoryItem(BaseModel):
+    plan: ScenePlan = Field(description="The plan of the video")
+    user: HumanMessage = Field(description="The user's message")
+    ai: AIMessage = Field(description="The AI's message")
+
+class PlannerHistory(PlannerHistoryItem):
+    history: list[PlannerHistoryItem] = Field(description="The history of the conversation")
+
+    def __add__(self, item: "PlannerHistoryItem") -> "PlannerHistory":
+        new_history = self.history + [item]
+        return PlannerHistory(
+            plan=item.plan,
+            user=item.user,
+            ai=item.ai,
+            history=new_history,
+        )
 
 
 class PlannerInput(BaseModel):
@@ -69,13 +84,49 @@ def _follow_up_to_messages(inp: PlannerInput):
 follow_up_planner_pipeline = RunnableLambda(_follow_up_to_messages) | planner_model
 
 
-def plan(input: PlannerInput) -> PlannerResponse:
-    if input.plan is None or input.history is None:
-        response = initial_planner_pipeline.invoke({
-            "n_scenes": input.n_scenes,
-            "prompt": input.prompt,
+def plan(history: PlannerHistory | None, prompt: str, n_scenes: int) -> PlannerHistory:
+    if history is None:
+        result = initial_planner_pipeline.invoke({
+            "n_scenes": n_scenes,
+            "prompt": prompt,
         })
+        new_history_item = PlannerHistoryItem(
+            plan=result.plan,
+            user=HumanMessage(content=prompt),
+            ai=AIMessage(content=result.response),
+        )
+        return PlannerHistory(
+            plan=new_history_item.plan,
+            user=new_history_item.user,
+            ai=new_history_item.ai,
+            history=[new_history_item],
+        )
     else:
-        response = follow_up_planner_pipeline.invoke(input)
+        chat_history = []
+        for item in history.history:
+            chat_history.append(item.user)
+            chat_history.append(item.ai)
+        input = PlannerInput(plan=history.history[-1].plan, history=chat_history, prompt=prompt, n_scenes=n_scenes)
+        result = follow_up_planner_pipeline.invoke(input)
+        new_history_item = PlannerHistoryItem(
+            plan=result.plan,
+            user=HumanMessage(content=prompt),
+            ai=AIMessage(content=result.response),
+        )
+        return history + new_history_item
 
-    return PlannerResponse(**response.model_dump(), history=input.history)
+def plan_revert(history: PlannerHistory, n_steps: int) -> PlannerHistory:
+    if len(history.history) < n_steps:
+        raise ValueError(f"History has only {len(history.history)} steps, but {n_steps} steps are required")
+    items = history.history[-n_steps:]
+    last = items[-1]
+    return PlannerHistory(plan=last.plan, user=last.user, ai=last.ai, history=items)
+
+def plan_revert_edit(history: PlannerHistory, n_steps: int, prompt: str, n_scenes: int) -> PlannerHistory:
+    if len(history.history) < n_steps:
+        raise ValueError(f"History has only {len(history.history)} steps, but {n_steps} steps are required")
+    items = history.history[-n_steps:]
+    last = items[-1]
+    new_history = PlannerHistory(plan=last.plan, user=last.user, ai=last.ai, history=items)
+    return plan(new_history, prompt, n_scenes)
+

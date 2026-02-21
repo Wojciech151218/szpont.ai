@@ -1,11 +1,8 @@
-import warnings
-
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from langchain_core.messages import HumanMessage, AIMessage
-from planner import plan, display_plan_and_history, PlannerInput
+from planner_terminal import run_planning_repl
 
 if __name__ == "__main__":
- 
+    run_planning_repl(n_scenes=5)
