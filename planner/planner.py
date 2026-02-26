@@ -2,8 +2,7 @@ from langchain_core.runnables import RunnableLambda
 from models import llm_model
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate,HumanMessagePromptTemplate
-from planner.models import PlannerOutput, PlannerHistory, PlannerHistoryItem, PlannerInput
-from planner.planner_service import PlannerService
+from planner.models import PlannerInput, PlannerOutput
 
 
 
@@ -51,12 +50,3 @@ def _follow_up_to_messages(inp: PlannerInput):
 
 
 follow_up_planner_pipeline = RunnableLambda(_follow_up_to_messages) | planner_model
-
-
-planner_service = PlannerService(
-    initial_planner_pipeline=initial_planner_pipeline,
-    follow_up_planner_pipeline=follow_up_planner_pipeline,
-)
-
-
-

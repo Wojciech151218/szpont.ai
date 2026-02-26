@@ -1,5 +1,3 @@
-from typing import Any
-
 from fastapi import HTTPException, status
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -76,4 +74,4 @@ class PlannerService:
         items = self._history.items[-n_steps:]
         last = items[-1]
         new_history = PlannerHistory(plan=last.plan, user=last.user, ai=last.ai, items=items)
-        return self.plan(new_history, prompt, n_scenes)
+        return PlannerService(new_history).plan(prompt, n_scenes)
