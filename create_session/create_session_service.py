@@ -2,12 +2,13 @@ from typing import Any
 from uuid import uuid4
 
 from pynamodb.exceptions import DoesNotExist
-
+from fastapi import HTTPException, status
 try:
     from .schemas import CreateSessionSchema
 except ImportError:
     from schemas import CreateSessionSchema
 
+from planner.models import PlannerHistory
 
 class CreateSessionService:
     def create_session(
@@ -52,16 +53,16 @@ class CreateSessionService:
         self._remove_from_list_field(session, "image_ids", image_ids)
         return session
 
-    def update_history(self, session_id: str, history: list[dict[str, Any]]) -> CreateSessionSchema:
+    def update_history(self, session_id: str, history: PlannerHistory) -> CreateSessionSchema:
         session = self._get_or_raise(session_id)
-        session.history = history
+        session.history = history.model_dump()
         session.save()
         return session
 
     def _get_or_raise(self, session_id: str) -> CreateSessionSchema:
         session = self.get_session(session_id)
         if session is None:
-            raise ValueError(f"Session '{session_id}' does not exist")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Session '{session_id}' does not exist")
         return session
 
     def _extend_list_field(self, session: CreateSessionSchema, field_name: str, values: list[str]) -> None:

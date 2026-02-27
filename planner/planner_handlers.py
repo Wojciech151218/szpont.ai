@@ -1,10 +1,13 @@
 from typing import Any
 
+from pydantic_core import ValidationError
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from planner.models import PlannerHistory, PlannerHistoryItem
-from planner.planner_service import PlannerService
+from planner.planner_service import PlannerService 
+from pydantic_core import ValidationError
 
 try:
     from create_session.create_session_service import CreateSessionService
@@ -36,22 +39,19 @@ class PlannerSessionResponse(BaseModel):
     history: PlannerHistory
 
 
-def _history_to_payload(history: PlannerHistory) -> list[dict[str, Any]]:
-    return [item.model_dump(mode="json") for item in history.items]
 
 
 def _history_from_payload(payload: list[dict[str, Any]] | None) -> PlannerHistory | None:
     if not payload:
         return None
     try:
-        items = [PlannerHistoryItem.model_validate(item) for item in payload]
-    except Exception as exc:
+        history = PlannerHistory.model_validate(payload)
+    except ValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Stored session history has invalid format",
         ) from exc
-    last = items[-1]
-    return PlannerHistory(plan=last.plan, user=last.user, ai=last.ai, items=items)
+    return history
 
 
 def _load_session_history_or_404(session_id: str) -> PlannerHistory | None:
@@ -66,7 +66,7 @@ def _load_session_history_or_404(session_id: str) -> PlannerHistory | None:
 
 def _persist_history(session_id: str, history: PlannerHistory) -> None:
     try:
-        create_session_service.update_history(session_id, _history_to_payload(history))
+        create_session_service.update_history(session_id,history)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -77,7 +77,7 @@ def _persist_history(session_id: str, history: PlannerHistory) -> None:
 @router.post("")
 def create_plan(body: PlanRequest) -> PlannerSessionResponse:
     history = PlannerService(None).plan(body.prompt, body.n_scenes)
-    session = create_session_service.create_session(history=_history_to_payload(history))
+    session = create_session_service.create_session(history=history.model_dump())
     return PlannerSessionResponse(session_id=session.id, history=history)
 
 

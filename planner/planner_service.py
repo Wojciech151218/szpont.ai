@@ -7,7 +7,7 @@ from planner.planner import initial_planner_pipeline, follow_up_planner_pipeline
 class PlannerService:
     def __init__(self, initial_history: PlannerHistory | None) -> None:
         self._history = initial_history
-        pass
+        
 
     def plan(self, prompt: str, n_scenes: int) -> PlannerHistory:
         if self._history is None:
@@ -26,12 +26,14 @@ class PlannerService:
                 ai=new_history_item.ai,
                 items=[new_history_item],
             )
-        chat_history = []
-        for item in self._history.items:
-            chat_history.append(item.user)
-            chat_history.append(item.ai)
-        planner_input = PlannerInput(
+        chat_history = PlannerHistory(
             plan=self._history.items[-1].plan,
+            user=self._history.items[-1].user,
+            ai=self._history.items[-1].ai,
+            items=self._history.items,
+        )
+        planner_input = PlannerInput(
+            current_plan=self._history.items[-1].plan,
             history=chat_history,
             prompt=prompt,
             n_scenes=n_scenes,

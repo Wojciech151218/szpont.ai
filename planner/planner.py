@@ -2,7 +2,7 @@ from langchain_core.runnables import RunnableLambda
 from models import llm_model
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate,HumanMessagePromptTemplate
-from planner.models import PlannerInput, PlannerOutput
+from planner.models import PlannerInput, PlannerOutput, ScenePlans
 
 
 
@@ -28,12 +28,18 @@ def get_initial_prompt() -> ChatPromptTemplate:
     
 
 
-def follow_up_message(input: PlannerInput) -> ChatPromptTemplate:
+def _follow_up_message_template(input: PlannerInput) -> ChatPromptTemplate:
+    messages = []
+    for item in input.history.items:
+        messages.append(item.user)
+        messages.append(item.ai)
+
+    
     return ChatPromptTemplate.from_messages([
         system_message,
-        *input.history,
+        *messages,
         HumanMessagePromptTemplate.from_template(
-        "edit the plan of the scene {plan} based on the user's request: {prompt}"
+        "edit the plan of the scenes: {plan} based on the user's request: {prompt}"
         )
     ])
 
@@ -41,10 +47,14 @@ def follow_up_message(input: PlannerInput) -> ChatPromptTemplate:
 initial_planner_pipeline = get_initial_prompt() | planner_model
 
 
+
+def _plan_prettify(plan: ScenePlans) -> str:
+    return "\n".join([f"{i+1}. {p}" for i, p in enumerate(plan.scenes)])
+
 def _follow_up_to_messages(inp: PlannerInput):
-    template = follow_up_message(inp)
+    template = _follow_up_message_template(inp)
     return template.invoke({
-        "plan": inp.plan.model_dump_json() if inp.plan else "{}",
+        "plan": _plan_prettify(inp.current_plan) if inp.current_plan else "{}",
         "prompt": inp.prompt,
     })
 
