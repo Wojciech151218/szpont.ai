@@ -1,5 +1,5 @@
 from langchain_core.runnables import RunnableLambda
-from models import llm_model
+from ai_models import llm_model
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate,HumanMessagePromptTemplate
 from planner.models import PlannerInput, PlannerOutput, ScenePlans
